@@ -14,6 +14,7 @@ DataOps applies DevOps principles to data engineering:
 | Deploy code to servers        | Deploy notebooks/jobs to Databricks              |
 | Test in staging before prod   | Run data pipeline in staging, validate output    |
 | Rollback on failure           | Destroy failed deployment automatically          |
+| Branch protection             | Block merge if data tests fail on Databricks     |
 
 ## Project Structure
 
@@ -21,35 +22,37 @@ DataOps applies DevOps principles to data engineering:
 2_dataops/
 ├── src/                          # Python source code
 │   ├── calculator.py             #   Arithmetic operations
-│   └── string_utils.py           #   String helper functions
+│   └── string_utils.py          #   String helper functions
 ├── tests/                        # Unit tests (DevOps)
-│   ├── test_calculator.py        #   Calculator tests
-│   └── test_string_utils.py      #   String utils tests
+│   ├── test_calculator.py       #   Calculator tests
+│   └── test_string_utils.py     #   String utils tests
 ├── notebooks/                    # Databricks notebooks (DataOps)
-│   ├── main_pipeline.py          #   Main data pipeline
-│   └── test_pipeline.py          #   Data quality tests
+│   ├── main_pipeline.py         #   Main data pipeline
+│   └── test_pipeline.py         #   Data quality tests
 ├── resources/                    # Databricks job definitions
-│   └── dataops_jobs.yml          #   Pipeline + test job configs
+│   └── dataops_jobs.yml         #   Pipeline + test job configs
 ├── .github/workflows/
-│   └── test.yml                  #   CI/CD pipeline (3 stages)
-├── databricks.yml                # Databricks Asset Bundle config
+│   └── test.yml                 #   CI/CD pipeline (4 stages)
+├── databricks.yml               # Databricks Asset Bundle config
 ├── requirements.txt
 └── README.md
 ```
 
-## CI/CD Pipeline — 3 Stages
+## CI/CD Pipeline — 4 Stages
 
-The GitHub Actions workflow (`.github/workflows/test.yml`) runs a 3-stage pipeline:
+The GitHub Actions workflow (`.github/workflows/test.yml`) runs a 4-stage pipeline:
 
 ```
-┌─────────────────────┐     ┌──────────────────────────┐     ┌─────────────────────┐
-│  Stage 1: Unit Tests│────▶│ Stage 2: Deploy & Test   │────▶│ Stage 3: Deploy     │
-│  (DevOps)           │     │ on Databricks (DataOps)  │     │ to Production       │
-│                     │     │                          │     │ (DataOps)           │
-│  - pytest           │     │  - Deploy to dev target  │     │  - Deploy to prod   │
-│  - Python 3.10-3.12 │     │  - Run test notebook     │     │  - Only on main     │
-│                     │     │  - Rollback if fails     │     │  - After all gates  │
-└─────────────────────┘     └──────────────────────────┘     └─────────────────────┘
+┌─────────────────────┐     ┌──────────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Stage 1            │     │  Stage 2             │     │  Stage 3         │     │  Stage 4        │
+│  Unit Tests         │────▶│  Deploy & Test on    │────▶│  Quality Gate    │────▶│  Deploy to      │
+│  (DevOps)           │     │  Databricks (DataOps)│     │  (Blocks merge)  │     │  Production     │
+│                     │     │                      │     │                  │     │                 │
+│  - pytest           │     │  - Deploy to dev     │     │  - Checks all    │     │  - Only after   │
+│  - Python 3.10-3.12 │     │  - Run test notebook │     │    stages passed │     │    merge to     │
+│                     │     │  - Rollback if fails │     │  - Required in   │     │    main         │
+│                     │     │                      │     │    branch rules  │     │                 │
+└─────────────────────┘     └──────────────────────┘     └──────────────────┘     └─────────────────┘
                                       │
                                       │ On failure:
                                       ▼
@@ -58,6 +61,31 @@ The GitHub Actions workflow (`.github/workflows/test.yml`) runs a 3-stage pipeli
                               │  Destroy dev   │
                               │  deployment    │
                               └────────────────┘
+```
+
+## Demo Flow for Students
+
+```bash
+# 1. Start on main (production code)
+git checkout main
+
+# 2. Create a feature branch
+git checkout -b feature/my-change
+
+# 3. Make a change (e.g., edit a notebook or source file)
+#    ... edit files ...
+
+# 4. Commit and push
+git add .
+git commit -m "my change"
+git push -u origin feature/my-change
+
+# 5. Open a PR on GitHub: feature/my-change → main
+#    → Stages 1, 2, 3 run automatically
+#    → PR is BLOCKED from merging until Stage 3 (Quality Gate) passes
+
+# 6. Merge the PR on GitHub
+#    → Stage 4 runs automatically and deploys to production
 ```
 
 ## Getting Started
@@ -89,16 +117,30 @@ databricks bundle deploy -t prod
 
 ## Setup Requirements
 
-### GitHub Secrets
+### 1. GitHub Secrets
 
-Add these secrets in your GitHub repo (Settings → Secrets → Actions):
+Create an environment called `dev` in your GitHub repo (Settings → Environments)
+and add these secrets:
 
 | Secret              | Value                                            |
 |---------------------|--------------------------------------------------|
 | `DATABRICKS_HOST`   | Your workspace URL (e.g., `https://dbc-xxx.cloud.databricks.com`) |
 | `DATABRICKS_TOKEN`  | A Databricks Personal Access Token               |
 
-### Databricks Workspace
+### 2. Branch Protection Rule (blocks merge if tests fail)
+
+Go to: **Settings → Rules → Rulesets → New ruleset**
+
+1. Name: `Protect main`
+2. Target branches: add `main`
+3. Check **Require status checks to pass**
+4. Add required check: **`Stage 3: Quality Gate`**
+5. Save
+
+This ensures PRs can only be merged when unit tests AND Databricks data
+tests have passed.
+
+### 3. Databricks Workspace
 
 - Serverless compute must be enabled, **or** uncomment the cluster config
   in `resources/dataops_jobs.yml`
@@ -110,5 +152,6 @@ Add these secrets in your GitHub repo (Settings → Secrets → Actions):
 1. **Unit Tests (DevOps)**: Test your Python code locally with pytest
 2. **Bundle Deploy (DataOps)**: Package and deploy notebooks + jobs to Databricks
 3. **Data Quality Tests (DataOps)**: Run assertions on actual Spark data
-4. **Gated Promotion**: Only deploy to prod after ALL tests pass
-5. **Automatic Rollback**: Destroy failed deployments — bad code never stays live
+4. **Quality Gate**: A single check that blocks merging if anything failed
+5. **Gated Promotion**: Only deploy to prod after ALL tests pass
+6. **Automatic Rollback**: Destroy failed deployments — bad code never stays live
