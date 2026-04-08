@@ -1,0 +1,152 @@
+# =============================================================================
+# DataOps CI/CD Pipeline
+# =============================================================================
+#
+# This workflow demonstrates how DataOps extends DevOps:
+#
+#   DevOps (what you already know):
+#     - Run unit tests on every PR
+#     - Automated testing before deployment
+#
+#   DataOps (the extension):
+#     - Deploy data pipelines to a staging environment
+#     - Run data quality tests ON THE ACTUAL PLATFORM (Databricks)
+#     - Only promote to production if data tests pass
+#     - Rollback if data tests fail
+#
+# Pipeline stages:
+#   1. Unit Tests      → Run pytest locally (DevOps)
+#   2. Deploy & Test   → Deploy to Databricks dev, run data tests (DataOps)
+#   3. Deploy to Prod  → Promote to production if everything passes (DataOps)
+#
+# =============================================================================
+
+name: DataOps CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+
+# =============================================================================
+# STAGE 1: Unit Tests (DevOps best practice)
+# =============================================================================
+# Same as any DevOps pipeline — run local tests first.
+# This catches code bugs BEFORE we touch any cloud resources.
+# =============================================================================
+jobs:
+  unit-tests:
+    name: "Stage 1: Unit Tests (DevOps)"
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: pytest tests/ -v
+
+  # ===========================================================================
+  # STAGE 2: Deploy to Staging + Run Data Tests (DataOps extension)
+  # ===========================================================================
+  # This is where DataOps differs from DevOps:
+  #   1. Deploy notebooks/jobs to Databricks (dev target)
+  #   2. Run the test job ON Databricks (not locally!)
+  #   3. The test job runs the pipeline + validates data quality
+  #   4. If tests fail → rollback (destroy the deployment)
+  #
+  # Why test on the platform?
+  #   - Local tests can't catch Spark-specific issues
+  #   - Data quality depends on the actual execution environment
+  #   - Schema changes, permissions, cluster configs — all platform-specific
+  # ===========================================================================
+  deploy-and-test:
+    name: "Stage 2: Deploy & Test on Databricks (DataOps)"
+    needs: unit-tests
+    runs-on: ubuntu-latest
+
+    # These secrets must be configured in GitHub repo settings
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      # --- Deploy to dev (staging) environment ---
+      - name: Deploy to dev (staging)
+        run: |
+          echo "Deploying bundle to Databricks dev target..."
+          databricks bundle deploy -t dev
+
+      # --- Run data quality tests on Databricks ---
+      # 'bundle run' blocks until the job finishes.
+      # If the test notebook fails (assertion error), this step fails.
+      - name: Run data quality tests on Databricks
+        run: |
+          echo "Running data quality tests on Databricks..."
+          echo "This triggers the test_job which:"
+          echo "  1. Runs the data pipeline"
+          echo "  2. Validates data quality assertions"
+          databricks bundle run test_job -t dev
+
+      # --- Rollback on failure ---
+      # If ANY previous step failed, destroy the dev deployment.
+      # This is a DataOps safety net: bad code never stays deployed.
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Data tests FAILED! Rolling back staging deployment..."
+          databricks bundle destroy -t dev --auto-approve
+          echo "Rollback complete. Deployment reverted."
+
+  # ===========================================================================
+  # STAGE 3: Deploy to Production (DataOps)
+  # ===========================================================================
+  # Only runs when:
+  #   - Code is pushed to main (not on PRs)
+  #   - ALL previous stages passed (unit tests + data tests)
+  #
+  # This is the "promotion" step: code that passed all gates
+  # gets deployed to the production environment.
+  # ===========================================================================
+  deploy-production:
+    name: "Stage 3: Deploy to Production (DataOps)"
+    needs: deploy-and-test
+    # Only deploy to prod on push to main (not on PRs)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Deploy to production
+        run: |
+          echo "All tests passed! Deploying to production..."
+          databricks bundle deploy -t prod
+          echo "Production deployment complete!"

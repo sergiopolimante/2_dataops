@@ -1,0 +1,51 @@
+# =============================================================================
+# Databricks Asset Bundle — DataOps Demo
+# =============================================================================
+# This file defines HOW and WHERE our project gets deployed to Databricks.
+# Think of it as the "infrastructure config" for our data platform.
+#
+# Key concepts:
+#   - bundle:  metadata about this project
+#   - include: which resource files to load (jobs, pipelines, etc.)
+#   - targets: deployment environments (dev, prod)
+#
+# Docs: https://docs.databricks.com/dev-tools/bundles/index.html
+# =============================================================================
+
+bundle:
+  name: dataops_demo
+
+# Load job definitions from the resources/ folder
+include:
+  - resources/*.yml
+
+# =============================================================================
+# Targets — define WHERE we deploy
+# =============================================================================
+# In DataOps (like DevOps), we use multiple environments:
+#   - dev:  for development and CI/CD testing (safe to break)
+#   - prod: for production (stable, tested code only)
+# =============================================================================
+targets:
+
+  # ---------------------------------------------------------------------------
+  # DEV target — used during development and CI/CD pipeline testing
+  # ---------------------------------------------------------------------------
+  dev:
+    mode: development       # Prefixes resources with "[dev username]" to avoid conflicts
+    default: true           # Default target when no -t flag is provided
+    workspace:
+      host: https://dbc-fcf1e73f-89c4.cloud.databricks.com
+
+  # ---------------------------------------------------------------------------
+  # PROD target — only deployed after all tests pass in CI/CD
+  # ---------------------------------------------------------------------------
+  prod:
+    mode: production
+    workspace:
+      host: https://dbc-fcf1e73f-89c4.cloud.databricks.com
+      # Deploy to a specific path so there's only ONE production copy
+      root_path: /Workspace/Users/sergiopolimante@gmail.com/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: sergiopolimante@gmail.com
+        level: CAN_MANAGE
