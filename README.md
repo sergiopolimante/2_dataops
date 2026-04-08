@@ -1,5 +1,6 @@
 # DataOps Demo — DevOps Extended for Data Pipelines
 
+
 This project demonstrates how **DataOps** extends **DevOps** best practices
 to data pipelines. It uses **Databricks Asset Bundles** for deployment and
 **GitHub Actions** for CI/CD.

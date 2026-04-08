@@ -78,7 +78,9 @@ jobs:
     needs: unit-tests
     runs-on: ubuntu-latest
 
-    # These secrets must be configured in GitHub repo settings
+    # GitHub Environment — secrets (DATABRICKS_HOST, DATABRICKS_TOKEN)
+    # are stored in the "dev" environment in GitHub repo settings.
+    environment: dev
     env:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
       DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
@@ -134,6 +136,10 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
 
+    # Reuses the same "dev" environment for now.
+    # In a real setup, you'd create a separate "prod" environment
+    # with its own secrets and approval gates.
+    environment: dev
     env:
       DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
       DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
