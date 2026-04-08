@@ -17,7 +17,8 @@
 # Pipeline stages:
 #   1. Unit Tests      → Run pytest locally (DevOps)
 #   2. Deploy & Test   → Deploy to Databricks dev, run data tests (DataOps)
-#   3. Deploy to Prod  → Promote to production if everything passes (DataOps)
+#   3. Quality Gate    → Blocks PR merge if ANY previous stage failed
+#   4. Deploy to Prod  → Promote to production after merge (DataOps)
 #
 # =============================================================================
 
@@ -120,18 +121,53 @@ jobs:
           echo "Rollback complete. Deployment reverted."
 
   # ===========================================================================
-  # STAGE 3: Deploy to Production (DataOps)
+  # STAGE 3: Quality Gate — Blocks PR merge if any test failed
+  # ===========================================================================
+  # This job is the ONE check you configure as "required" in GitHub branch
+  # protection. It only passes if BOTH stage 1 and stage 2 succeeded.
+  #
+  # Why a separate job?
+  #   - Stage 1 runs 3 parallel jobs (one per Python version)
+  #   - Instead of requiring all 4+ checks individually in branch protection,
+  #     you just require this single "quality-gate" check.
+  # ===========================================================================
+  quality-gate:
+    name: "Stage 3: Quality Gate"
+    needs: [unit-tests, deploy-and-test]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check if all stages passed
+        run: |
+          echo "Unit Tests:      ${{ needs.unit-tests.result }}"
+          echo "Deploy & Test:   ${{ needs.deploy-and-test.result }}"
+
+          if [[ "${{ needs.unit-tests.result }}" != "success" ]]; then
+            echo "BLOCKED: Unit tests failed."
+            exit 1
+          fi
+
+          if [[ "${{ needs.deploy-and-test.result }}" != "success" ]]; then
+            echo "BLOCKED: Databricks data tests failed."
+            exit 1
+          fi
+
+          echo "All gates passed! PR is safe to merge."
+
+  # ===========================================================================
+  # STAGE 4: Deploy to Production (DataOps)
   # ===========================================================================
   # Only runs when:
-  #   - Code is pushed to main (not on PRs)
+  #   - Code is pushed to main (i.e., a PR was merged)
   #   - ALL previous stages passed (unit tests + data tests)
   #
   # This is the "promotion" step: code that passed all gates
   # gets deployed to the production environment.
   # ===========================================================================
   deploy-production:
-    name: "Stage 3: Deploy to Production (DataOps)"
-    needs: deploy-and-test
+    name: "Stage 4: Deploy to Production (DataOps)"
+    needs: quality-gate
     # Only deploy to prod on push to main (not on PRs)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
