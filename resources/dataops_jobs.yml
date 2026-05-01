@@ -19,10 +19,19 @@ resources:
     # Main Pipeline Job — runs the data pipeline in production
     # -------------------------------------------------------------------------
     pipeline_job:
-      name: dataops_demo_pipeline
+      name: dataops_demo_pipeline_30_04_2026
 
       tasks:
         - task_key: run_pipeline
+          notebook_task:
+            notebook_path: ../notebooks/main_pipeline.py
+        - task_key: run_pipeline_2
+          notebook_task:
+            notebook_path: ../notebooks/main_pipeline.py
+        - task_key: run_pipeline_3
+          depends_on:
+            - task_key: run_pipeline
+            - task_key: run_pipeline_2
           notebook_task:
             notebook_path: ../notebooks/main_pipeline.py
 
