@@ -19,7 +19,7 @@ resources:
     # Main Pipeline Job — runs the data pipeline in production
     # -------------------------------------------------------------------------
     pipeline_job:
-      name: dataops_demo_pipeline_30_04_2026
+      name: dataops_demo_pipeline
 
       tasks:
         - task_key: run_pipeline
