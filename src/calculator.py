@@ -17,3 +17,7 @@ def divide(a: float, b: float) -> float:
 
 def square(a: float) -> float:
     return a * a
+
+
+def cube(a: float) -> float:
+    return a * a * a
