@@ -21,3 +21,15 @@ def square(a: float) -> float:
 
 def cube(a: float) -> float:
     return a * a * a
+
+def square_root(a: float) -> float:
+    return a ** 0.5
+
+def cube_root(a: float) -> float:
+    return a ** (1/3)
+
+def logarithm(a: float) -> float:
+    return math.log(a)
+
+def exponential(a: float) -> float:
+    return math.exp(a)

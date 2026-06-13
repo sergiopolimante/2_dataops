@@ -1,0 +1,38 @@
+# =============================================================================
+# Databricks Job Definitions — DataOps Demo
+# =============================================================================
+# Jobs define WHAT runs on Databricks and WHEN.
+#
+# We define TWO jobs:
+#   1. pipeline_job  — the main data pipeline (runs daily in production)
+#   2. test_job      — data quality tests (runs during CI/CD to validate changes)
+#
+# The CI/CD pipeline (GitHub Actions) uses test_job to validate code changes
+# BEFORE promoting them to production. This is the core DataOps pattern:
+#   "Test your data pipelines on the platform, not just locally."
+# =============================================================================
+
+resources:
+  jobs:
+    # -------------------------------------------------------------------------
+    # Test Job — runs data quality checks during CI/CD
+    # -------------------------------------------------------------------------
+    # This job is triggered by GitHub Actions after deploying to dev.
+    # If it FAILS → CI/CD rolls back the deployment.
+    # If it PASSES → CI/CD promotes the code to production.
+    # -------------------------------------------------------------------------
+    test_job:
+      name: dataops_demo_tests
+
+      tasks:
+        # Step 1: Run the pipeline (create the data)
+        - task_key: run_pipeline
+          notebook_task:
+            notebook_path: ../notebooks/main_pipeline.py
+
+        # Step 2: Validate the data (depends on step 1)
+        - task_key: run_tests
+          depends_on:
+            - task_key: run_pipeline
+          notebook_task:
+            notebook_path: ../notebooks/test_pipeline.py
