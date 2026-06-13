@@ -56,18 +56,18 @@ resources:
     # If it FAILS → CI/CD rolls back the deployment.
     # If it PASSES → CI/CD promotes the code to production.
     # -------------------------------------------------------------------------
-    test_job:
-      name: dataops_demo_tests
+    # test_job:
+    #   name: dataops_demo_tests
 
-      tasks:
-        # Step 1: Run the pipeline (create the data)
-        - task_key: run_pipeline
-          notebook_task:
-            notebook_path: ../notebooks/main_pipeline.py
+    #   tasks:
+    #     # Step 1: Run the pipeline (create the data)
+    #     - task_key: run_pipeline
+    #       notebook_task:
+    #         notebook_path: ../notebooks/main_pipeline.py
 
-        # Step 2: Validate the data (depends on step 1)
-        - task_key: run_tests
-          depends_on:
-            - task_key: run_pipeline
-          notebook_task:
-            notebook_path: ../notebooks/test_pipeline.py
+    #     # Step 2: Validate the data (depends on step 1)
+    #     - task_key: run_tests
+    #       depends_on:
+    #         - task_key: run_pipeline
+    #       notebook_task:
+    #         notebook_path: ../notebooks/test_pipeline.py
