@@ -15,8 +15,6 @@ def divide(a: float, b: float) -> float:
         raise ValueError("Cannot divide by zero")
     return a / b
 
-def square(a: float) -> float:
-    return a * a
 
 
 # def cube(a: float) -> float:
